@@ -50,11 +50,11 @@ class Guard
   end
 
   private def check(row, col)
-    if @checking_for_loop && @prev_turns.includes?({@bearing, @row, @col})
+    if is_in_infinite_loop
       return true
     end
 
-    if row < 0 || row == @map.size || col < 0 || col == @map[0].size
+    if left_map(row, col)
       return false
     end
 
@@ -73,6 +73,14 @@ class Guard
       set_pos_visited
       patrol
     end
+  end
+
+  private def is_in_infinite_loop
+    @checking_for_loop && @prev_turns.includes?({@bearing, @row, @col})
+  end
+
+  private def left_map(row, col)
+    row < 0 || row == @map.size || col < 0 || col == @map[0].size
   end
 
   private def loops_forever

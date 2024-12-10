@@ -2,7 +2,7 @@ file_id = 0
 file_block = true
 disk = [] of Char | Int32
 
-input = File.read("input-test.txt")
+input = File.read("input.txt")
 input.each_char do |char|
   block_length = char.to_u8
   (1..block_length).each do |b|
@@ -17,18 +17,31 @@ input.each_char do |char|
 end
 
 # puts disk
+
+# puts disk
 compacted_disk = [] of Int32
-disk.each do |block|
+disk_copy = disk.clone
+end_index = disk_copy.size - 1
+disk.each_with_index do |block, idx|
   if block == '.'
     end_block = '.'
     while end_block == '.'
-      end_block = disk.pop
+      end_block = disk_copy[end_index]
+      end_index -= 1
     end
-    compacted_disk << end_block.to_i
+    # puts "idx=#{idx}, end_index=#{end_index}"
+    if idx <= end_index
+      compacted_disk << end_block.to_i
+    end
   else
-    compacted_disk << block.to_i
+    if idx <= end_index
+      compacted_disk << block.to_i
+    end
   end
+  # puts "compacted_disk = #{compacted_disk}"
 end
+
+# puts compacted_disk
 
 checksum = compacted_disk.map_with_index do |file_id, idx|
   (idx * file_id).to_u64

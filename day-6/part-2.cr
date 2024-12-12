@@ -6,13 +6,15 @@ enum Bearing : UInt8
 end
 
 map = [] of Array(Char)
+input_filename = ARGV[0]
 
-File.each_line("input.txt") do |line|
+File.each_line(input_filename) do |line|
   map << line.chars
 end
 
 guard = Guard.new(map)
 guard.patrol
+guard.save_map
 puts guard.obstructions
 
 class Guard
@@ -50,11 +52,11 @@ class Guard
   end
 
   private def check(row, col)
-    if is_in_infinite_loop
+    if in_a_loop?
       return true
     end
 
-    if left_map(row, col)
+    if left_map?(row, col)
       return false
     end
 
@@ -66,30 +68,40 @@ class Guard
       turn_right
       patrol
     else
-      if !@checking_for_loop && loops_forever
+      if !@checking_for_loop && obstruction_causes_loop?
         @obstructions += 1
+        case @bearing
+        when .north?
+          @map[@row - 1][@col] = 'O'
+        when .east?
+          @map[@row][@col + 1] = 'O'
+        when .south?
+          @map[@row + 1][@col] = 'O'
+        when .west?
+          @map[@row][@col - 1] = 'O'
+        end
       end
       @row, @col = row, col
-      set_pos_visited
+      # set_pos_visited
       patrol
     end
   end
 
-  private def is_in_infinite_loop
+  private def in_a_loop?
     @checking_for_loop && @prev_turns.includes?({@bearing, @row, @col})
   end
 
-  private def left_map(row, col)
+  private def left_map?(row, col)
     row < 0 || row == @map.size || col < 0 || col == @map[0].size
   end
 
-  private def loops_forever
+  private def obstruction_causes_loop?
     loop_check_guard = Guard.new(@map, @bearing, @row, @col)
     loop_check_guard.patrol
   end
 
   private def set_pos_visited
-    @map[@row][@col] = 'X' if @map[@row][@col] != '^'
+    @map[@row][@col] = 'X' if @map[@row][@col] != '^' && @map[@row][@col] != 'O'
   end
 
   private def turn_right
@@ -109,5 +121,15 @@ class Guard
       end
     end
     raise Exception.new "Guard not in map!"
+  end
+
+  def save_map
+    map_str = String.build do |str|
+      @map.each do |row|
+        str << row.join("")
+        str << "\n"
+      end
+    end
+    File.write("map.txt", map_str)
   end
 end

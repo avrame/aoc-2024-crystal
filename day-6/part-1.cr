@@ -5,9 +5,11 @@ enum Bearing : UInt8
   West
 end
 
+input_filename = ARGV[0]
+
 map = [] of Array(Char)
 
-File.each_line("input.txt") do |line|
+File.each_line(input_filename) do |line|
   map << line.chars
 end
 
@@ -66,7 +68,7 @@ class Guard
       end
     end
     # save_map
-    puts "unique_pos_count = #{unique_pos_count}"
+    puts "unique_pos_count = #{unique_pos_count + 1}" # Add 1 for starting position
   end
 
   private def set_pos_visited

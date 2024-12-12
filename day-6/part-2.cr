@@ -15,7 +15,7 @@ end
 guard = Guard.new(map)
 guard.patrol
 guard.save_map
-puts guard.obstructions
+puts guard.obstructions.size
 
 class Guard
   @row : Int32
@@ -24,7 +24,7 @@ class Guard
 
   @checking_for_loop = false
   @prev_turns : Set(Tuple(Bearing, Int32, Int32))
-  property obstructions = 0
+  property obstructions = Set(Tuple(Int32, Int32)).new
 
   def initialize(@map : Array(Array(Char)))
     @row, @col = find_guard_pos
@@ -69,7 +69,7 @@ class Guard
       patrol
     else
       if !@checking_for_loop && obstruction_causes_loop?
-        @obstructions += 1
+        @obstructions << {@row, @col}
         case @bearing
         when .north?
           @map[@row - 1][@col] = 'O'

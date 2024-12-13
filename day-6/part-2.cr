@@ -5,37 +5,117 @@ enum Bearing : UInt8
   West
 end
 
-map = [] of Array(Char)
 input_filename = ARGV[0]
 
-File.each_line(input_filename) do |line|
-  map << line.chars
+init_map = Map.new input_filename
+start_row_idx, start_col_idx = init_map.find_guard_start_pos
+map_with_path = init_map.clone
+path_guard = Guard.new(map_with_path, start_row_idx, start_col_idx)
+path_guard.patrol # create initial path
+
+marked_up_map = map_with_path.clone
+obstacles_count = 0
+map_with_path.each_with_index do |row, row_idx|
+  row.each_with_index do |space, col_idx|
+    if space == 'X'
+      test_map = map_with_path.clone
+      guard = Guard.new(test_map, start_row_idx, start_col_idx)
+      test_map.set_test_obstacle(row_idx, col_idx)
+      if guard.will_loop_forever?
+        obstacles_count += 1
+        marked_up_map[row_idx][col_idx] = 'O'
+      else
+        marked_up_map[row_idx][col_idx] = 'X'
+      end
+    end
+  end
+end
+marked_up_map.save_to_file
+puts "obstacles_count = #{obstacles_count}"
+
+class Map
+  @map = [] of Array(Char)
+
+  def initialize(input_filename : String)
+    File.each_line(input_filename) do |line|
+      @map << line.chars
+    end
+  end
+
+  def initialize(@map : Array(Array(Char)))
+  end
+
+  def [](row_idx)
+    @map[row_idx]
+  end
+
+  def []?(row_idx)
+    @map[row_idx]?
+  end
+
+  def []=(row_idx, row)
+    @map[row_idx] = row
+  end
+
+  def size
+    @map.size
+  end
+
+  def each_with_index(&)
+    @map.each_with_index do |row, idx|
+      yield row, idx
+    end
+  end
+
+  def clone
+    cloned_map = @map.map do |row|
+      row.clone
+    end
+    Map.new cloned_map
+  end
+
+  def find_guard_start_pos
+    @map.each_with_index do |row, row_idx|
+      row.each_with_index do |space, col_idx|
+        if space == '^'
+          return row_idx, col_idx
+        end
+      end
+    end
+    raise Exception.new "Guard not in map!"
+  end
+
+  def set_test_obstacle(row, col)
+    @map[row][col] = '#'
+  end
+
+  def print
+    puts generate_map_str
+    puts "\n"
+  end
+
+  def save_to_file
+    File.write("map.txt", generate_map_str)
+  end
+
+  private def generate_map_str
+    String.build do |str|
+      @map.each do |row|
+        str << row.join("")
+        str << "\n"
+      end
+    end
+  end
 end
 
-guard = Guard.new(map)
-guard.patrol
-guard.save_map
-puts guard.obstructions.size
-
 class Guard
+  @map : Map
   @row : Int32
   @col : Int32
   @bearing : Bearing = Bearing::North
+  @prev_turns : Set(Tuple(Bearing, Int32, Int32)) | Nil
 
-  @checking_for_loop = false
-  @prev_turns : Set(Tuple(Bearing, Int32, Int32))
-  property obstructions = Set(Tuple(Int32, Int32)).new
-
-  def initialize(@map : Array(Array(Char)))
-    @row, @col = find_guard_pos
-    @prev_turns = Set(Tuple(Bearing, Int32, Int32)).new
-    set_pos_visited
-  end
-
-  def initialize(@map : Array(Array(Char)), @bearing, @row, @col)
-    @checking_for_loop = true
-    @prev_turns = Set.new [{@bearing, @row, @col}]
-    turn_right
+  def initialize(@map : Map, @row, @col)
   end
 
   def patrol
@@ -51,57 +131,35 @@ class Guard
     end
   end
 
-  private def check(row, col)
-    if in_a_loop?
-      return true
-    end
+  def will_loop_forever?
+    @prev_turns = Set(Tuple(Bearing, Int32, Int32)).new
+    return patrol
+  end
 
-    if left_map?(row, col)
+  private def check(row, col)
+    if row < 0 || row == @map.size || col < 0 || col == @map[0].size
       return false
     end
-
     case @map[row][col]
     when '#'
-      if @checking_for_loop
-        @prev_turns << {@bearing, @row, @col}
+      prev_turns = @prev_turns
+      if prev_turns
+        if prev_turns.includes?({@bearing, @row, @col})
+          return true
+        end
+        prev_turns << {@bearing, @row, @col}
       end
       turn_right
       patrol
     else
-      if !@checking_for_loop && obstruction_causes_loop?
-        @obstructions << {@row, @col}
-        case @bearing
-        when .north?
-          @map[@row - 1][@col] = 'O'
-        when .east?
-          @map[@row][@col + 1] = 'O'
-        when .south?
-          @map[@row + 1][@col] = 'O'
-        when .west?
-          @map[@row][@col - 1] = 'O'
-        end
-      end
       @row, @col = row, col
-      # set_pos_visited
+      set_pos_visited
       patrol
     end
   end
 
-  private def in_a_loop?
-    @checking_for_loop && @prev_turns.includes?({@bearing, @row, @col})
-  end
-
-  private def left_map?(row, col)
-    row < 0 || row == @map.size || col < 0 || col == @map[0].size
-  end
-
-  private def obstruction_causes_loop?
-    loop_check_guard = Guard.new(@map, @bearing, @row, @col)
-    loop_check_guard.patrol
-  end
-
   private def set_pos_visited
-    @map[@row][@col] = 'X' if @map[@row][@col] != '^' && @map[@row][@col] != 'O'
+    @map[@row][@col] = 'X' if @map[@row][@col] != '^'
   end
 
   private def turn_right
@@ -110,26 +168,5 @@ class Guard
     else
       @bearing += 1
     end
-  end
-
-  private def find_guard_pos
-    @map.each_with_index do |row, row_idx|
-      row.each_with_index do |space, col_idx|
-        if space == '^'
-          return row_idx, col_idx
-        end
-      end
-    end
-    raise Exception.new "Guard not in map!"
-  end
-
-  def save_map
-    map_str = String.build do |str|
-      @map.each do |row|
-        str << row.join("")
-        str << "\n"
-      end
-    end
-    File.write("map.txt", map_str)
   end
 end
